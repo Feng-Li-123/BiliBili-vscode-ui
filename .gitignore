@@ -1,0 +1,26 @@
+# Local development and generated acceptance artifacts
+work/
+outputs/
+rollback/
+private/
+node_modules/
+__pycache__/
+*.pyc
+*.log
+*.har
+*.zip
+*.crdownload
+本地加载器*.user.js
+安装助手.html
+本地自动更新设置.md
+验证记录*.md
+
+# Machine-specific files and credentials
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+Thumbs.db
+desktop.ini
+.DS_Store
