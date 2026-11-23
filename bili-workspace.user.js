@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Bili Workspace · 工作界面
 // @namespace    local.bili-workspace
-// @version      0.7.0
+// @version      0.7.2
 // @description  B站工作界面；动态、直播、收藏夹、稍后再看、主站与视频采用 VS Code 风格，保留原生内容和操作，默认关闭。
 // @match        https://t.bilibili.com/*
 // @match        https://www.bilibili.com/*
@@ -816,6 +816,12 @@
       listen(window, 'popstate', checkRoute);
       listen(window, 'hashchange', checkRoute);
       listen(document, 'fullscreenchange', updateScreen);
+      if (kind === 'video') {
+        // Media events do not bubble; capture also covers a replacement video.
+        for (const event of ['play', 'playing', 'pause', 'ended', 'emptied', 'loadedmetadata', 'error']) {
+          listen(document, event, updatePlayerPlayback, true);
+        }
+      }
       listen(window, 'pagehide', event => {
         pendingNavigation = true;
         clearTimeout(resumeTimer);
@@ -1429,6 +1435,7 @@
 
   function bindPlayer() {
     if (!playback) return;
+    if (kind === 'video') updatePlayerPlayback();
     const wrap = kind === 'live' ? document.querySelector('#player-ctnr .player-section')
       : document.getElementById('playerWrap');
     const player = kind === 'live' ? wrap?.querySelector('#live-player-ctnr')
@@ -1460,6 +1467,13 @@
       }
       updateScreen();
     }
+  }
+
+  function updatePlayerPlayback() {
+    if (stopped || kind !== 'video') return;
+    const media = document.querySelector('#bilibili-player .bpx-player-video-wrap video');
+    document.documentElement.classList.toggle('bwc-video-playing',
+      Boolean(media && !media.paused && !media.ended && !media.error));
   }
 
   function measurePlayer() {
@@ -1590,7 +1604,7 @@
     document.documentElement.classList.remove(
       CLASS, 'bwc-video', 'bwc-dynamic', 'bwc-home', 'bwc-following', 'bwc-live',
       'bwc-favorites', 'bwc-watchlater',
-      'bwc-expanded', 'bwc-small-player',
+      'bwc-expanded', 'bwc-small-player', 'bwc-video-playing',
       'bwc-code-open', 'bwc-layout-split', 'bwc-layout-stacked',
     );
     for (const name of ['--bwc-player-width', '--bwc-video-height']) {
@@ -2231,6 +2245,7 @@ html.bwc-active .bili-dyn-list__item { margin-bottom: 0 !important; }
 html.bwc-active .bili-dyn-item {
   border: 0 !important; border-bottom: 1px solid #303034 !important;
   border-radius: 0 !important; margin: 0 !important; padding: 18px 0 !important;
+  min-width: 0 !important;
   background: transparent !important; box-shadow: none !important;
   color: #d4d4d4; counter-increment: bwc-record;
 }
@@ -2275,8 +2290,14 @@ html.bwc-active .bili-dyn-card-video__body {
 html.bwc-active .bili-dyn-card-video__title {
   font-size: 13px !important; color: #ce9178 !important; line-height: 1.6 !important;
 }
-html.bwc-active .bili-dyn-card-video__desc { font-size: 11px !important; color: #9999a2 !important; }
-html.bwc-active .bili-dyn-card-video__stat { color: #85858e !important; font-size: 11px !important; }
+html.bwc-active.bwc-dynamic .bili-dyn-card-video__desc {
+  display: -webkit-box !important; -webkit-box-orient: vertical !important;
+  -webkit-line-clamp: 2 !important; height: auto !important; flex-shrink: 0;
+  overflow: hidden !important; overflow-wrap: anywhere; white-space: normal !important;
+  font-size: 11px !important; line-height: 17px !important; color: #9999a2 !important;
+}
+/* Native statistics are absolutely positioned over long descriptions. */
+html.bwc-active.bwc-dynamic .bili-dyn-card-video__stat { display: none !important; }
 html.bwc-active :is(.bili-dyn-content__orig.reference, .bili-dyn-content__forw) {
   background: #252526 !important; border-left: 2px solid #454549; border-radius: 0 !important;
 }
@@ -2402,6 +2423,18 @@ html.bwc-active.bwc-video:not(.bwc-expanded) #bilibili-player .bpx-player-contro
   bottom: 0 !important; left: 0 !important; right: 0 !important;
   height: 35px !important; margin: 0 !important;
   opacity: 1 !important; visibility: visible !important; transform: none !important;
+}
+/* Hide the timeline and buttons together while playing away from the player.
+   Include children that explicitly restore visibility/pointer events below. */
+@media (hover: hover) and (pointer: fine) {
+  html.bwc-active.bwc-video.bwc-video-playing:not(.bwc-expanded) #bilibili-player
+  .bpx-player-container:not(:hover):not(:has(:focus-visible)) :is(
+    .bpx-player-control-wrap, .bpx-player-control-entity,
+    .bpx-player-control-top, .bpx-player-control-bottom,
+    .bpx-player-progress-area, .bpx-player-progress-wrap
+  ) {
+    opacity: 0 !important; visibility: hidden !important; pointer-events: none !important;
+  }
 }
 html.bwc-active.bwc-video:not(.bwc-expanded) #bilibili-player .bpx-player-progress-area {
   display: block !important; width: 100% !important; height: 20px !important;
@@ -2658,7 +2691,6 @@ html.bwc-active.bwc-expanded #bwc-shell { display: none !important; }
     min-width: 100px; width: 100px !important; height: 72px !important; flex-basis: 100px;
   }
   html.bwc-active .bili-dyn-card-video__body { padding: 7px 9px !important; }
-  html.bwc-active .bili-dyn-card-video__desc { display: none; }
   html.bwc-active.bwc-video:not(.bwc-expanded) .bpx-player-video-info { display: none !important; }
   .bwc-status { gap: 12px; }
   .bwc-tab { padding-inline: 10px; }
